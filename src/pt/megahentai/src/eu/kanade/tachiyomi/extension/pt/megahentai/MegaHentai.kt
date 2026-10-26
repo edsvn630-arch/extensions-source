@@ -53,11 +53,11 @@ abstract class MegaHentai : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val url = baseUrl.toHttpUrl().newBuilder().apply {
+        val searchUrl = baseUrl.toHttpUrl().newBuilder().apply {
             if (page > 1) addPathSegments("page/$page/")
             addQueryParameter("s", query)
         }.build()
-        val doc = client.get(url).asJsoup()
+        val doc = client.get(searchUrl).asJsoup()
 
         val seen = HashSet<String>()
         val mangas = doc.select("a[href*=/ler-online/]").mapNotNull { a ->
