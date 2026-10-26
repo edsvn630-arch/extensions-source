@@ -53,11 +53,33 @@ abstract class MegaHentai : KeiSource() {
         query: String,
         filters: FilterList,
     ): MangasPage {
-        val url = baseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("page/$page/")
-            .addQueryParameter("s", query)
-            .build()
-        return parseList(client.get(url).asJsoup())
+        val url = baseUrl.toHttpUrl().newBuilder().apply {
+            if (page > 1) addPathSegments("page/$page/")
+            addQueryParameter("s", query)
+        }.build()
+        val doc = client.get(url).asJsoup()
+
+        val seen = HashSet<String>()
+        val mangas = doc.select("a[href*=/ler-online/]").mapNotNull { a ->
+            val href = a.absUrl("href")
+            if (href.trimEnd('/') == "$baseUrl/ler-online") return@mapNotNull null
+            if (!seen.add(href)) return@mapNotNull null
+            val card = a.closest("article") ?: a.parent()
+            val img = card?.selectFirst("img[data-src]") ?: card?.selectFirst("img[src]")
+            val name = card?.selectFirst("h3, .title")?.text()?.takeIf { it.isNotBlank() }
+                ?: img?.attr("alt")?.takeIf { it.isNotBlank() }
+                ?: a.text().takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            SManga.create().apply {
+                url = href.removePrefix(baseUrl)
+                title = name
+                thumbnail_url = img?.let {
+                    it.absUrl("data-src").ifEmpty { it.absUrl("src") }
+                }
+            }
+        }
+        val hasNext = doc.selectFirst("a.arrow_pag:has(i.icon-caret-right), a.next") != null
+        return MangasPage(mangas, hasNext)
     }
 
     override fun getFilterList(data: JsonElement?): FilterList = FilterList()
